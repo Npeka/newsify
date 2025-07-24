@@ -1,0 +1,96 @@
+name: Demo Backend Lint & Coverage Check
+
+on:
+  # push được kích hoạt khi có sự kiện đẩy mã lên 
+  push:
+    # chỉ chạy workflow này khi có thay đổi trong nhánh main hoặc dev
+    branches: [ main, dev ]
+    # chỉ chạy khi có thay đổi trong thư mục backend hoặc file workflow này
+    paths:
+      - 'backend/**'
+      - '.github/workflows/demo.yml'
+
+  # workflow_dispatch cho phép chạy thủ công từ giao diện GitHub
+  workflow_dispatch:
+
+# jobs là các tác vụ sẽ được thực hiện trong workflow này
+jobs:
+  # job build để thiết lập môi trường và cài đặt các phụ thuộc, 
+  # chạy lint và kiểm tra coverage
+  build:
+    # các job sẽ chạy trên máy Ubuntu mới nhất
+    runs-on: ubuntu-latest
+
+    # các bước thực hiện trong job này
+    steps:
+      # checkout mã nguồn từ kho lưu trữ
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # thiết lập pnpm, một trình quản lý gói cho Node.js
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      # thiết lập Node.js với phiên bản 18 và cache cho pnpm
+      - name: Setup Node.js 
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: 'pnpm'
+          cache-dependency-path: backend/pnpm-lock.yaml
+
+      # cài đặt các phụ thuộc của dự án
+      - name: Install dependencies
+        working-directory: backend
+        run: pnpm install
+
+      # chạy lệnh lint để kiểm tra mã nguồn
+      - name: Run lint
+        working-directory: backend
+        run: pnpm lint
+
+      # chạy test coverage
+      - name: Run test coverage
+        working-directory: backend
+        run: pnpm test:cov
+
+      # upload file tổng hợp coverage (JSON) làm artifact để dùng ở bước sau
+      - name: Upload coverage summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-summary
+          path: backend/coverage/coverage-summary.json
+
+  check-coverage:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      # tải xuống báo cáo coverage đã được upload từ job "test"
+      - name: Download coverage summary
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-summary
+          path: coverage
+
+      # cài đặt công cụ hỗ trợ xử lý số và JSON (jq để đọc file JSON, bc để tính toán số thực)
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq bc
+
+      # phân tích file coverage và kiểm tra xem có đạt ngưỡng yêu cầu không (>= 60%)
+      - name: Check coverage threshold (60%)  
+        run: |
+          COVERAGE=$(jq '.total.lines.pct' coverage/coverage-summary.json)
+          echo "Line coverage: $COVERAGE%"
+
+          # nếu thấp hơn 60 thì thất bại, ngược lại thì thành công
+          if (( $(echo "$COVERAGE < 60" | bc -l) )); then
+            echo "❌ Coverage is below 60%!"
+            exit 1
+          else
+            echo "✅ Coverage is acceptable."
+          fi
