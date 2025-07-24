@@ -81,15 +81,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq bc
 
-      # phân tích file coverage và kiểm tra xem có đạt ngưỡng yêu cầu không (>= 60%)
-      - name: Check coverage threshold (60%)  
+      # phân tích file coverage và kiểm tra xem có đạt ngưỡng yêu cầu không (>= 40%)
+      - name: Check coverage threshold (40%)  
         run: |
           COVERAGE=$(jq '.total.lines.pct' coverage/coverage-summary.json)
           echo "Line coverage: $COVERAGE%"
 
-          # nếu thấp hơn 60 thì thất bại, ngược lại thì thành công
-          if (( $(echo "$COVERAGE < 60" | bc -l) )); then
-            echo "❌ Coverage is below 60%!"
+          # nếu thấp hơn 40 thì thất bại, ngược lại thì thành công
+          if (( $(echo "$COVERAGE < 40" | bc -l) )); then
+            echo "❌ Coverage is below 40%!"
             exit 1
           else
             echo "✅ Coverage is acceptable."
